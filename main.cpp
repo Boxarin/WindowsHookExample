@@ -13,7 +13,9 @@ InputHandler ih;
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-	InputHandler::Instance().InstallHook();
+	InputHandler::Instance().InstallHooks();
+	InputHandler::Instance().InitializeInputHandlersThread();
 	InputHandler::Instance().Messsages();
+	InputHandler::Instance().UninstallHook();
 	return 1;
 }
