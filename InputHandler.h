@@ -7,17 +7,20 @@
 
 #include <Windows.h>
 
+#include "InputStructs.h"
+
 class InputHandler
 {
 private:
 
-	std::queue <int> inputQueue;
+	std::queue <mouseEvent> mouseQueue;
+	std::queue <keyboardEvent> keyboardQueue;
 	std::mutex mtx;
 	std::condition_variable cv;
 
 public:
 
-	HHOOK hInputHook;
+	HHOOK hMouseHook, hKeyboardHook;
 	MSG msg; // struct with information about all messages in our queue
 
 	InputHandler();
@@ -28,12 +31,15 @@ public:
 		return iHandler;
 	}
 
-	void InstallHook(); // function to install our hook
+	void InstallHooks(); // function to install our hook
+	void InitializeInputHandlersThread();//function to initialize the threads we need to handle input
 	void UninstallHook(); // function to uninstall our hook
 
 	int Messsages(); // function to "deal" with our messages 
 
-	void msgProcessor();
+	void mouseMsgProcessor();
+	void keyboardMsgProcessor();
 
-	static LRESULT WINAPI inputCallback(int nCode, WPARAM wParam, LPARAM lParam); //callback declaration
+	static LRESULT WINAPI mouseCallback(int nCode, WPARAM wParam, LPARAM lParam); //callback declaration
+	static LRESULT WINAPI keyboardCallback(int nCode, WPARAM wParam, LPARAM lParam); //callback declaration
 };

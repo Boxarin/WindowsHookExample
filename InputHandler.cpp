@@ -13,10 +13,18 @@ InputHandler::~InputHandler()
 	//Empty for now
 }
 
-void InputHandler::InstallHook()
+void InputHandler::InstallHooks()
 {
-	//doing a mouse hook because its basic af
-	if (!(hInputHook = SetWindowsHookEx(WH_MOUSE_LL, inputCallback, NULL, 0))) {
+
+	if (!(hMouseHook = SetWindowsHookEx(WH_MOUSE_LL, mouseCallback, NULL, 0))) {
+		throw("Mouse hook error");
+		/*
+		* we should probably throw an error here or something
+		* wakarimasen lol
+		*/
+	}
+	if (!(hKeyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, keyboardCallback, NULL, 0))) {
+		throw("Keyboard hook error");
 		/*
 		* we should probably throw an error here or something
 		* wakarimasen lol
@@ -24,28 +32,32 @@ void InputHandler::InstallHook()
 	}
 }
 
+void InputHandler::InitializeInputHandlersThread()
+{
+	std::thread mouseEventLoopThrd(&InputHandler::mouseMsgProcessor, this);
+	std::thread keyboardEventLoopThrd(&InputHandler::keyboardMsgProcessor, this);
+}
+
 void InputHandler::UninstallHook()
 {
-	UnhookWindowsHookEx(hInputHook);
+	UnhookWindowsHookEx(hMouseHook);
+	UnhookWindowsHookEx(hKeyboardHook);
 }
 
 int InputHandler::Messsages()
 {
-	std::thread inputEventLoopThrd(&InputHandler::msgProcessor, this);
 	while (msg.message != WM_QUIT) { //while we do not close our application
 		if (GetMessage(&msg, NULL, 0, 0)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
 	}
-	UninstallHook(); //if we close, let's uninstall our hook
 	return (int)msg.wParam; //return the messages
 }
 
-void InputHandler::msgProcessor()
+void InputHandler::mouseMsgProcessor()
 {
-	//replace int with an enum of input type such as moouse up mouse down etc
-	int inputHolder;
+	mouseEvent me;
 	while (1) {
 		// lock mutex
 		// while condition youre waiting for: cv.wait()
@@ -53,36 +65,69 @@ void InputHandler::msgProcessor()
 		// unlock mutex
 
 		std::unique_lock<std::mutex> lock(mtx);
-		while (inputQueue.empty()) {
+		while (mouseQueue.empty()) {
 			cv.wait(lock);
 		}
 
-		inputHolder = inputQueue.front();
-		inputQueue.pop();
+		me = mouseQueue.front();
+		mouseQueue.pop();
 		lock.unlock();
 
-		//replace int with an enum of input type such as moouse up mouse down etc	
+		if (me == LM_DOWN) {
 
-		if (inputHolder == 0) {
-			//do something
 		}
-		else if (inputHolder == 1) {
-			//do something
+		else if (me == LM_UP) {
+			//end firing
 		}
-		else if (inputHolder == 2) {
-			//do something
+		else if (me == RM_DOWN) {
+			//this or that
 		}
-		else if (inputHolder == 3) {
-			//do something
+		else if (me == RM_UP) {
+			//the other
 		}
 		else
 		{
-			//do something that isnt the other things
+			//Once again WAKARIMASEN LOL
 		}
 	};
 }
 
-LRESULT InputHandler::inputCallback(int nCode, WPARAM wParam, LPARAM lParam)
+void InputHandler::keyboardMsgProcessor()
+{
+	keyboardEvent ke;
+	while (1) {
+		// lock mutex
+		// while condition youre waiting for: cv.wait()
+		// do operation
+		// unlock mutex
+
+		std::unique_lock<std::mutex> lock(mtx);
+		while (keyboardQueue.empty()) {
+			cv.wait(lock);
+		}
+
+		ke = keyboardQueue.front();
+		keyboardQueue.pop();
+		lock.unlock();
+
+		if (ke == INS_DOWN) {
+		}
+		else if (ke == INS_UP) {
+			//no use
+		}
+		else if (ke == DEL_DOWN) {
+		}
+		else if (ke == DEL_UP) {
+			//the other
+		}
+		else
+		{
+			//Once again WAKARIMASEN LOL
+		}
+	};
+}
+
+LRESULT InputHandler::mouseCallback(int nCode, WPARAM wParam, LPARAM lParam)
 {
 	MSLLHOOKSTRUCT * pMouseStruct = (MSLLHOOKSTRUCT *)lParam; // WH_MOUSE_LL struct
 	if (nCode == 0) { // we have information in wParam/lParam ? If yes, let's check it:
@@ -96,19 +141,19 @@ LRESULT InputHandler::inputCallback(int nCode, WPARAM wParam, LPARAM lParam)
 		switch (wParam) {
 
 		case WM_LBUTTONUP: {
-			Instance().inputQueue.push(0);
+			Instance().mouseQueue.push(LM_UP);
 			Instance().cv.notify_all();
 		}break;
 		case WM_LBUTTONDOWN: {
-			Instance().inputQueue.push(1);
+			Instance().mouseQueue.push(LM_DOWN);
 			Instance().cv.notify_all();
 		}break;
 		case WM_RBUTTONDOWN: {
-			Instance().inputQueue.push(2);
+			Instance().mouseQueue.push(RM_DOWN);
 			Instance().cv.notify_all();
 		}break;
 		case WM_RBUTTONUP: {
-			Instance().inputQueue.push(3);
+			Instance().mouseQueue.push(RM_UP);
 			Instance().cv.notify_all();
 		}break;
 
@@ -116,5 +161,48 @@ LRESULT InputHandler::inputCallback(int nCode, WPARAM wParam, LPARAM lParam)
 		Instance().mtx.unlock();
 
 	}
-	return CallNextHookEx(InputHandler::Instance().hInputHook, nCode, wParam, lParam);
+	return CallNextHookEx(InputHandler::Instance().hMouseHook, nCode, wParam, lParam);
+}
+
+LRESULT InputHandler::keyboardCallback(int nCode, WPARAM wParam, LPARAM lParam)
+{
+	KBDLLHOOKSTRUCT * pKeyboardStruct = (KBDLLHOOKSTRUCT *)lParam; // WH_MOUSE_LL struct
+	if (nCode == 0) { // we have information in wParam/lParam ? If yes, let's check it:
+		Instance().mtx.lock();
+
+		if ((wParam == WM_SYSKEYDOWN) || (wParam == WM_KEYDOWN)) {
+			switch (pKeyboardStruct->vkCode) {
+
+			case VK_INSERT: {//                                                  These need to be updated to keyboard codes or something needs to be done here
+				Instance().keyboardQueue.push(INS_DOWN);
+				Instance().cv.notify_all();
+			}break;
+			case VK_DELETE: {
+				Instance().keyboardQueue.push(DEL_DOWN);
+				Instance().cv.notify_all();
+			}break;
+
+			}
+
+		}
+		else if ((wParam == WM_SYSKEYUP) || (wParam == WM_KEYUP)) {
+			switch (pKeyboardStruct->vkCode) {
+
+			case VK_INSERT: {//                                                  These need to be updated to keyboard codes or something needs to be done here
+				Instance().keyboardQueue.push(INS_UP);
+				Instance().cv.notify_all();
+			}break;
+			case VK_DELETE: {
+				Instance().keyboardQueue.push(DEL_DOWN);
+				Instance().cv.notify_all();
+			}break;
+
+			}
+
+		}
+
+		Instance().mtx.unlock();
+
+	}
+	return CallNextHookEx(InputHandler::Instance().hKeyboardHook, nCode, wParam, lParam);
 }
